@@ -1,0 +1,65 @@
+name: Deploy to Cloudflare Pages
+
+on:
+  # Manual trigger from Actions tab
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deploy environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - preview
+
+  # Tag-based trigger (e.g., v1.0, v1.2.3)
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          else
+            # Tags always deploy to production
+            echo "environment=production" >> $GITHUB_OUTPUT
+          fi
+          # Extract project output directory (React default is 'build' or 'dist')
+          if [ -d "dist" ]; then
+            echo "output_dir=dist" >> $GITHUB_OUTPUT
+          elif [ -d "build" ]; then
+            echo "output_dir=build" >> $GITHUB_OUTPUT
+          elif [ -d "out" ]; then
+            echo "output_dir=out" >> $GITHUB_OUTPUT
+          else
+            echo "output_dir=dist" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy ${{ steps.env.outputs.output_dir }} --project-name=${{ github.event.repository.name }} --branch=${{ steps.env.outputs.environment == 'production' && 'main' || 'preview' }}
