@@ -25,6 +25,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
       - name: Determine environment
         id: env
         run: |
@@ -34,66 +45,9 @@ jobs:
             echo "environment=production" >> $GITHUB_OUTPUT
           fi
 
-      - name: Check for build step
-        id: check-build
-        run: |
-          if [ -f "package.json" ] && grep -q '"build"' package.json; then
-            # Check if this is an AI Studio ESM app (uses importmap, no real build needed)
-            if grep -q 'importmap' index.html 2>/dev/null; then
-              echo "needs_build=false" >> $GITHUB_OUTPUT
-              echo "deploy_dir=." >> $GITHUB_OUTPUT
-              echo "📦 AI Studio ESM app detected — deploying source directly."
-            else
-              echo "needs_build=true" >> $GITHUB_OUTPUT
-              echo "deploy_dir=dist" >> $GITHUB_OUTPUT
-              echo "🔨 Build step detected — will run npm build."
-            fi
-          else
-            echo "needs_build=false" >> $GITHUB_OUTPUT
-            echo "deploy_dir=." >> $GITHUB_OUTPUT
-            echo "📦 No build step — deploying source directly."
-          fi
-
-      - name: Setup Node.js
-        if: steps.check-build.outputs.needs_build == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        if: steps.check-build.outputs.needs_build == 'true'
-        run: npm install
-
-      - name: Build
-        if: steps.check-build.outputs.needs_build == 'true'
-        run: npm run build
-
-      - name: Detect output directory
-        if: steps.check-build.outputs.needs_build == 'true'
-        id: output
-        run: |
-          if [ -d "dist" ]; then
-            echo "dir=dist" >> $GITHUB_OUTPUT
-          elif [ -d "build" ]; then
-            echo "dir=build" >> $GITHUB_OUTPUT
-          elif [ -d "out" ]; then
-            echo "dir=out" >> $GITHUB_OUTPUT
-          else
-            echo "dir=dist" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Set deploy directory
-        id: deploy
-        run: |
-          if [ "${{ steps.check-build.outputs.needs_build }}" = "true" ]; then
-            echo "dir=${{ steps.output.outputs.dir }}" >> $GITHUB_OUTPUT
-          else
-            echo "dir=." >> $GITHUB_OUTPUT
-          fi
-
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy ${{ steps.deploy.outputs.dir }} --project-name=${{ github.event.repository.name }} --branch=${{ steps.env.outputs.environment == 'production' && 'main' || 'preview' }}
+          command: pages deploy dist --project-name=${{ github.event.repository.name }} --branch=${{ steps.env.outputs.environment == 'production' && 'main' || 'preview' }}
