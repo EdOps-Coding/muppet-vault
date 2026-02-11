@@ -1,8 +1,16 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { ChatMessage } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// In production, route through the proxy (API key stays server-side)
+// In local dev, call Gemini directly with your local API key
+const isProxied = !!process.env.GEMINI_PROXY_URL;
+
+const ai = isProxied
+  ? new GoogleGenAI({
+      apiKey: "PROXIED",
+      httpOptions: { baseUrl: process.env.GEMINI_PROXY_URL },
+    })
+  : new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const askMuppetLore = async (history: ChatMessage[], message: string) => {
   try {
@@ -18,9 +26,6 @@ export const askMuppetLore = async (history: ChatMessage[], message: string) => 
       },
     });
 
-    // We only send the message text to sendMessage as per requirements
-    // For simplicity in this demo, we aren't rebuilding full history in the chat object every time
-    // but a real app would map the history.
     const response = await chat.sendMessage({ message });
     return response.text || "Sorry, I lost my notes in the prop room! (Error)";
   } catch (error) {
