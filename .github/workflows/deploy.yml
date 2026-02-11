@@ -1,7 +1,6 @@
 name: Deploy to Cloudflare Pages
 
 on:
-  # Manual trigger from Actions tab
   workflow_dispatch:
     inputs:
       environment:
@@ -13,7 +12,6 @@ on:
           - production
           - preview
 
-  # Tag-based trigger (e.g., v1.0, v1.2.3)
   push:
     tags:
       - 'v*'
@@ -36,7 +34,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_PROXY_URL: ${{ secrets.GEMINI_PROXY_URL }}
 
       - name: Determine environment
         id: env
